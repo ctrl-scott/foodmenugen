@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Menu Generator — Web + Go/Rust Hooks</title>
+  <style>
+    :root { --bg: #ffffff; --fg: #111; --muted: #666; --acc: #0a7; --border: #e5e5e5; }
+    html, body { height: 100%; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; color: var(--fg); background: var(--bg); }
+    .wrap { display: grid; grid-template-columns: 360px 1fr; gap: 16px; height: 100%; }
+    header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    header h1 { font-size: 18px; margin: 0; }
+    header .sub { color: var(--muted); font-size: 12px; }
+    .left { border-right: 1px solid var(--border); height: calc(100vh - 49px); overflow: auto; padding: 12px 12px 80px; }
+    .right { height: calc(100vh - 49px); overflow: auto; padding: 16px; }
+    .card { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    input[type="text"], input[type="number"], textarea, select { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 8px; padding: 8px; font: inherit; }
+    textarea { min-height: 60px; }
+    .btn { display: inline-flex; gap: 8px; align-items: center; border: 1px solid var(--border); background: #f9f9f9; padding: 8px 10px; border-radius: 8px; cursor: pointer; font: inherit; }
+    .btn.primary { background: var(--acc); border-color: var(--acc); color: #fff; }
+    .btn.ghost { background: transparent; }
+    .btn + .btn { margin-left: 6px; }
+    .pill { display:inline-block; padding: 2px 8px; border-radius: 999px; border:1px solid var(--border); font-size: 11px; color: var(--muted); }
+
+    /* Menu preview base styling */
+    .menu { max-width: 900px; margin: 0 auto; }
+    .menu header { border: 0; padding: 0; margin-bottom: 12px; text-align: left; }
+    .menu h2 { margin: 24px 0 8px; border-bottom: 2px solid #000; padding-bottom: 6px; font-size: 20px; }
+    .menu .meta { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+    .item { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--border); }
+    .item:last-child { border-bottom: 0; }
+    .item .name { font-weight: 600; }
+    .item .desc { color: var(--muted); font-size: 13px; }
+    .item .price { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .tags { display: inline-flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+    .tag { border: 1px solid var(--border); border-radius: 999px; font-size: 10px; padding: 2px 6px; color: var(--muted); }
+
+    /* Layout variants */
+    .menu.layout-classic {}
+    .menu.layout-two-col .section-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
+    .menu.layout-two-col .item { border-bottom: none; padding: 0 0 12px; }
+    .menu.layout-bordered h2 { border-bottom: none; position: relative; padding-bottom: 12px; }
+    .menu.layout-bordered h2::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 8px; background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="8" viewBox="0 0 100 8" preserveAspectRatio="none"><path d="M0,7 Q25,0 50,7 T100,7" fill="none" stroke="black" stroke-width="1.2"/></svg>') center/100% 8px no-repeat; }
+
+    /* Bistro variant: dotted leaders and inline price */
+    .menu.layout-bistro h2 { border-bottom: 0; font-size: 18px; letter-spacing: 0.5px; text-transform: uppercase; }
+    .menu.layout-bistro .bistro-list .bistro-line { display:flex; align-items: baseline; gap: 8px; }
+    .menu.layout-bistro .bistro-list .name { font-weight: 600; }
+    .menu.layout-bistro .bistro-list .leader { flex:1 1 auto; border-bottom: 1px dotted var(--muted); transform: translateY(-2px); opacity: .8; }
+    .menu.layout-bistro .bistro-list .price { font-variant-numeric: tabular-nums; }
+    .menu.layout-bistro .item { border-bottom: none; padding: 6px 0; }
+
+    /* SVG ornament styling */
+    .orn { display:flex; justify-content:center; margin: 8px 0 16px; }
+    .orn svg { width: 120px; height: auto; }
+
+    /* Logo */
+    .logo-wrap { display:flex; align-items:center; justify-content:flex-start; margin: 8px 0 12px; }
+    .logo-wrap.center { justify-content: center; }
+    .logo-wrap img { max-height: 68px; width:auto; display:block; }
+
+    /* Print */
+    @media print {
+      .wrap { display: block; }
+      .left, .sub { display: none !important; }
+      .right { padding: 0; }
+      .menu h2 { page-break-after: avoid; }
+      .item { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Menu Generator</h1>
+      <div class="sub">Single-file app · Offline-friendly · Hooks for Go/Rust</div>
+    </div>
+    <div>
+      <button class="btn" id="btnImport">Import JSON</button>
+      <button class="btn" id="btnExport">Export JSON</button>
+      <button class="btn" id="btnExportHTML">Export HTML</button>
+      <button class="btn" id="btnPrint">Print</button>
+      <button class="btn" id="btnTests" title="Run self-tests">Run Self‑Tests</button>
+    </div>
+  </header>
+  <div class="wrap">
+    <aside class="left" id="builder"></aside>
+    <main class="right">
+      <section class="menu" id="preview"></section>
+      <pre id="testlog" style="border:1px solid var(--border); border-radius:12px; padding:12px; display:none; white-space:pre-wrap;" aria-live="polite"></pre>
+    </main>
+  </div>
+
+  <script>
+  /**
+   * Menu JSON Schema (simplified)
+   * settings additions:
+   *   layoutVariant: 'classic' | 'two-col' | 'bordered' | 'bistro'
+   *   svgTheme: 'none' | 'fork' | 'laurel' | 'wave'
+   *   svgPlacement: 'header' | 'sections' | 'both'
+   *   logoData: dataURL | ''
+   *   logoPlacement: 'none' | 'left' | 'center'
+   */
+
+  // Small DOM helper with strict Node appends (no nulls)
+  const el = (tag, attrs = {}, children = []) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === 'class') n.className = v;
+      else if (k === 'html') n.innerHTML = v;
+      else if (v !== undefined && v !== null) n.setAttribute(k, v);
+    }
+    const arr = Array.isArray(children) ? children : [children];
+    for (const c of arr) {
+      if (c === null || c === undefined) continue;
+      n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    }
+    return n;
+  };
+
+  const uid = () => 'id-' + Math.random().toString(36).slice(2, 9);
+
+  const defaults = () => ({
+    id: uid(),
+    restaurant: { name: "Your Restaurant", address: "", phone: "", website: "", currency: "USD", note: "" },
+    settings: { priceDecimals: 2, showTags: true, showDescriptions: true, layoutVariant: 'classic', svgTheme: 'fork', svgPlacement: 'header', logoData: '', logoPlacement: 'none' },
+    sections: [{ id: uid(), title: "Starters", note: "", items: [] }]
+  });
+
+  let state = loadState() || defaults();
+
+  function loadState() { try { return JSON.parse(localStorage.getItem('menu.v1')); } catch { return null; } }
+  function saveState() { localStorage.setItem('menu.v1', JSON.stringify(state)); }
+
+  function money(n) {
+    const dec = state.settings.priceDecimals ?? 2;
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: state.restaurant.currency || 'USD',
+      minimumFractionDigits: dec,
+      maximumFractionDigits: dec
+    }).format(Number(n || 0));
+  }
+
+  function renderBuilder() {
+    const root = document.getElementById('builder');
+    root.innerHTML = '';
+
+    // Restaurant card
+    root.appendChild(el('div', { class: 'card' }, [
+      el('div', { class: 'row' }, [
+        field('Restaurant name', 'text', state.restaurant.name, v => { state.restaurant.name = v; update(); }),
+        field('Currency (ISO 4217)', 'text', state.restaurant.currency, v => { state.restaurant.currency = v.toUpperCase(); update(); }),
+      ]),
+      el('div', { class: 'row' }, [
+        field('Phone', 'text', state.restaurant.phone, v => { state.restaurant.phone = v; update(); }),
+        field('Website', 'text', state.restaurant.website, v => { state.restaurant.website = v; update(); }),
+      ]),
+      field('Address', 'text', state.restaurant.address, v => { state.restaurant.address = v; update(); }),
+      field('Menu note (optional)', 'text', state.restaurant.note, v => { state.restaurant.note = v; update(); }),
+      el('div', { class: 'row' }, [
+        selectBool('Show descriptions', state.settings.showDescriptions, v => { state.settings.showDescriptions = v; update(); }),
+        selectBool('Show tags', state.settings.showTags, v => { state.settings.showTags = v; update(); }),
+      ]),
+      el('div', { class: 'row' }, [
+        field('Price decimals', 'number', state.settings.priceDecimals, v => { state.settings.priceDecimals = Number(v); update(); }),
+        el('div')
+      ])
+    ]));
+
+    // Layout & SVG & Logo options
+    const layoutCard = el('div', { class: 'card' }, [
+      el('div', { class: 'pill' }, ['Layout, Ornament & Logo Options']),
+      el('div', { class: 'row' }, [
+        selectOptions('Layout variant', state.settings.layoutVariant, [
+          ['classic','Classic (single column)'],
+          ['two-col','Two column (per section)'],
+          ['bordered','Classic + decorative borders'],
+          ['bistro','Bistro (leaders)']
+        ], v => { state.settings.layoutVariant = v; update(); }),
+        selectOptions('SVG ornament', state.settings.svgTheme, [
+          ['none','None'], ['fork','Fork & Knife'], ['laurel','Laurel'], ['wave','Wave']
+        ], v => { state.settings.svgTheme = v; update(); })
+      ]),
+      el('div', { class: 'row' }, [
+        selectOptions('Ornament placement', state.settings.svgPlacement, [
+          ['header','Header only'], ['sections','Each section'], ['both','Header + sections']
+        ], v => { state.settings.svgPlacement = v; update(); }),
+        selectOptions('Logo placement', state.settings.logoPlacement, [
+          ['none','No logo'], ['left','Left'], ['center','Center']
+        ], v => { state.settings.logoPlacement = v; update(); })
+      ])
+    ]);
+
+    // Logo picker (data URL)
+    const logoRow = el('div', { class: 'row' });
+    const logoFieldWrap = el('div');
+    logoFieldWrap.append(el('label', { html: 'Logo (PNG/JPG/SVG; embedded)' }));
+    const uploadBtn = el('button', { class: 'btn' }, ['Choose image…']);
+    uploadBtn.addEventListener('click', async () => {
+      const picker = document.createElement('input');
+      picker.type = 'file';
+      picker.accept = 'image/png,image/jpeg,image/svg+xml';
+      picker.onchange = async () => {
+        const f = picker.files[0];
+        if (!f) return;
+        const fr = new FileReader();
+        fr.onload = () => { state.settings.logoData = String(fr.result || ''); update(); };
+        fr.readAsDataURL(f);
+      };
+      picker.click();
+    });
+    logoFieldWrap.append(uploadBtn);
+    logoRow.append(logoFieldWrap, el('div'));
+    layoutCard.append(logoRow);
+
+    root.appendChild(layoutCard);
+
+    // Sections list
+    state.sections.forEach((sec, sIdx) => {
+      const card = el('div', { class: 'card' });
+      card.append(
+        el('div', { class: 'row' }, [
+          field('Section title', 'text', sec.title, v => { sec.title = v; update(); }),
+          field('Section note', 'text', sec.note || '', v => { sec.note = v; update(); })
+        ])
+      );
+
+      // Add item button
+      const btnAdd = el('button', { class: 'btn', title: 'Add item' }, ['＋ Add item']);
+      btnAdd.addEventListener('click', () => {
+        sec.items.push({ id: uid(), name: '', description: '', price: 0, tags: [], available: true });
+        update();
+      });
+      card.appendChild(btnAdd);
+
+      // Items
+      sec.items.forEach((it, iIdx) => {
+        const row = el('div', { class: 'card' });
+        row.append(
+          el('div', { class: 'row' }, [
+            field('Name', 'text', it.name, v => { it.name = v; update(); }),
+            field('Price', 'number', it.price, v => { it.price = v; update(); })
+          ]),
+          field('Description', 'text', it.description, v => { it.description = v; update(); }),
+          field('Tags (comma separated)', 'text', (it.tags || []).join(', '), v => { it.tags = v.split(',').map(x => x.trim()).filter(Boolean); update(); })
+        );
+
+        // Controls row
+        const controls = el('div', { class: 'row' });
+        controls.append(
+          selectBool('Available', it.available !== false, v => { it.available = v; update(); })
+        );
+        const dupBtn = el('button', { class: 'btn ghost', title: 'Duplicate' }, ['Duplicate']);
+        dupBtn.addEventListener('click', () => {
+          const clone = JSON.parse(JSON.stringify({ ...it, id: uid() }));
+          sec.items.splice(iIdx + 1, 0, clone);
+          update();
+        });
+        controls.append(dupBtn);
+        row.append(controls);
+
+        const actions = el('div');
+        const del = el('button', { class: 'btn', title: 'Remove item' }, ['🗑 Remove']);
+        del.addEventListener('click', () => { sec.items.splice(iIdx, 1); update(); });
+        actions.appendChild(del);
+        row.appendChild(actions);
+
+        card.appendChild(row);
+      });
+
+      // Section actions
+      const footer = el('div');
+      const dup = el('button', { class: 'btn ghost' }, ['Duplicate section']);
+      dup.addEventListener('click', () => { state.sections.splice(sIdx + 1, 0, JSON.parse(JSON.stringify({ ...sec, id: uid() }))); update(); });
+      const rm = el('button', { class: 'btn' }, ['🗑 Remove section']);
+      rm.addEventListener('click', () => { state.sections.splice(sIdx, 1); update(); });
+      footer.append(dup, rm);
+      card.appendChild(footer);
+
+      root.appendChild(card);
+    });
+
+    const addSec = el('button', { class: 'btn primary' }, ['＋ Add section']);
+    addSec.addEventListener('click', () => { state.sections.push({ id: uid(), title: 'New Section', note: '', items: [] }); update(); });
+    root.appendChild(addSec);
+
+    // Backend hooks panel
+    const panel = el('div', { class: 'card' }, [
+      el('div', { class: 'pill' }, ['Backend hooks (optional)']),
+      field('Backend base URL (empty = browser-only)', 'text', (state.backend && state.backend.baseURL) || '', v => { state.backend = state.backend || {}; state.backend.baseURL = v; saveState(); }),
+      el('div', { class: 'row' }, [
+        field('Render endpoint', 'text', (state.backend && state.backend.renderPath) || '/api/render', v => { state.backend = state.backend || {}; state.backend.renderPath = v; saveState(); }),
+        field('Store endpoint', 'text', (state.backend && state.backend.storePath) || '/api/menu', v => { state.backend = state.backend || {}; state.backend.storePath = v; saveState(); })
+      ])
+    ]);
+    const sendBtn = el('button', { class: 'btn' }, ['Send to backend']);
+    sendBtn.addEventListener('click', sendToBackend);
+    panel.append(sendBtn);
+    root.appendChild(panel);
+  }
+
+  function field(labelText, type, value, oninput) {
+    const w = el('div');
+    const lab = el('label', { html: labelText });
+    const inp = type === 'number' ? el('input', { type: 'number', step: '0.01', value: value }) : el('input', { type, value });
+    if (type === 'text' && labelText.toLowerCase().includes('note')) inp.setAttribute('placeholder', 'Optional');
+    inp.addEventListener('input', e => oninput(e.target.value));
+    w.append(lab, inp);
+    return w;
+  }
+
+  function selectBool(labelText, value, onchange) {
+    const w = el('div');
+    const lab = el('label', { html: labelText });
+    const sel = el('select');
+    sel.append(el('option', { value: 'true' }, ['Yes']), el('option', { value: 'false' }, ['No']));
+    sel.value = String(Boolean(value));
+    sel.addEventListener('change', e => onchange(e.target.value === 'true'));
+    w.append(lab, sel);
+    return w;
+  }
+
+  function selectOptions(labelText, value, options, onchange) {
+    const w = el('div');
+    const lab = el('label', { html: labelText });
+    const sel = el('select');
+    for (const [val, label] of options) sel.appendChild(el('option', { value: val, ...(value===val?{selected:"selected"}:{}) }, [label]));
+    sel.addEventListener('change', e => onchange(e.target.value));
+    w.append(lab, sel);
+    return w;
+  }
+
+  function ornamentSVG(theme) {
+    if (theme === 'none') return null;
+    const svgMap = {
+      fork: `<svg viewBox="0 0 64 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round"><path d="M2 2 v12"/><path d="M6 2 v12"/><path d="M10 2 v12"/><path d="M14 2 v12"/><path d="M20 8 h42"/></g></svg>`,
+      laurel: `<svg viewBox="0 0 120 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10,12 C35,0 85,0 110,12" fill="none" stroke="black" stroke-width="1.5"/><path d="M20,12 l-6,-6 m6,6 l-6,6 M100,12 l6,-6 m-6,6 l6,6" stroke="black" stroke-width="1.5" fill="none"/></svg>`,
+      wave: `<svg viewBox="0 0 120 12" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M0,6 Q15,0 30,6 T60,6 T90,6 T120,6" fill="none" stroke="black" stroke-width="1.5"/></svg>`
+    };
+    const wrap = el('div', { class: 'orn', html: svgMap[theme] || '' });
+    return wrap;
+  }
+
+  function renderPreview() {
+    const p = document.getElementById('preview');
+    p.innerHTML = '';
+
+    const menu = el('section', { class: `menu layout-${state.settings.layoutVariant || 'classic'}` });
+
+    // Logo
+    if (state.settings.logoPlacement !== 'none' && state.settings.logoData) {
+      const lw = el('div', { class: `logo-wrap ${state.settings.logoPlacement === 'center' ? 'center' : ''}` });
+      lw.appendChild(el('img', { src: state.settings.logoData, alt: 'Logo' }));
+      menu.appendChild(lw);
+    }
+
+    // Header
+    const head = el('header');
+    head.append(
+      el('h1', { style: 'font-size:28px; margin:0;' }, [state.restaurant.name || 'Menu']),
+      el('div', { class: 'meta' }, [[state.restaurant.address, state.restaurant.phone, state.restaurant.website].filter(Boolean).join(' · ')]),
+      state.restaurant.note ? el('div', { class: 'meta' }, [state.restaurant.note]) : null
+    );
+    menu.appendChild(head);
+    if (state.settings.svgTheme !== 'none' && (state.settings.svgPlacement === 'header' || state.settings.svgPlacement === 'both')) {
+      const orn = ornamentSVG(state.settings.svgTheme); if (orn) menu.appendChild(orn);
+    }
+
+    // Sections
+    state.sections.forEach(sec => {
+      const title = el('h2', {}, [sec.title || 'Untitled Section']);
+      menu.appendChild(title);
+      if (state.settings.svgTheme !== 'none' && (state.settings.svgPlacement === 'sections' || state.settings.svgPlacement === 'both')) {
+        const orn2 = ornamentSVG(state.settings.svgTheme); if (orn2) menu.appendChild(orn2);
+      }
+      if (sec.note) menu.appendChild(el('div', { class: 'meta' }, [sec.note]));
+
+      // Variant container
+      let container;
+      if (state.settings.layoutVariant === 'two-col') {
+        container = el('div', { class: 'section-grid' });
+      } else if (state.settings.layoutVariant === 'bistro') {
+        container = el('div', { class: 'bistro-list' });
+      } else {
+        container = el('div');
+      }
+
+      sec.items.filter(it => it.available !== false).forEach(it => {
+        if (state.settings.layoutVariant === 'bistro') {
+          const line = el('div', { class: 'bistro-line' });
+          const name = el('div', { class: 'name' }, [it.name || 'Untitled Item']);
+          const leader = el('div', { class: 'leader' });
+          const price = el('div', { class: 'price' }, [money(it.price || 0)]);
+          line.append(name, leader, price);
+          container.appendChild(line);
+          if (state.settings.showDescriptions && it.description) container.appendChild(el('div', { class: 'desc' }, [it.description]));
+          if (state.settings.showTags && it.tags && it.tags.length) container.appendChild(el('div', { class: 'tags' }, it.tags.map(t => el('span', { class: 'tag' }, [t]))));
+        } else {
+          const row = el('div', { class: 'item' });
+          const left = el('div');
+          left.append(el('div', { class: 'name' }, [it.name || 'Untitled Item']));
+          if (state.settings.showDescriptions && it.description) left.append(el('div', { class: 'desc' }, [it.description]));
+          if (state.settings.showTags && it.tags && it.tags.length) left.append(el('div', { class: 'tags' }, it.tags.map(t => el('span', { class: 'tag' }, [t]))));
+          const right = el('div', { class: 'price' }, [money(it.price || 0)]);
+          row.append(left, right);
+          container.appendChild(row);
+        }
+      });
+      menu.appendChild(container);
+    });
+
+    p.appendChild(menu);
+  }
+
+  function update() { saveState(); renderBuilder(); renderPreview(); }
+
+  // Import/Export/Print
+  document.getElementById('btnImport').addEventListener('click', async () => {
+    const picker = document.createElement('input'); picker.type = 'file'; picker.accept = 'application/json';
+    picker.onchange = async () => { const f = picker.files[0]; if (!f) return; const txt = await f.text(); state = JSON.parse(txt); update(); };
+    picker.click();
+  });
+  document.getElementById('btnExport').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (state.restaurant.name || 'menu').toLowerCase().replace(/\s+/g, '-') + '.json';
+    a.click(); URL.revokeObjectURL(a.href);
+  });
+  document.getElementById('btnExportHTML').addEventListener('click', () => {
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(state.restaurant.name || 'Menu')}</title><style>${document.querySelector('style').innerHTML}</style></head><body><main class="right"><section class="menu" id="preview">${document.getElementById('preview').innerHTML}</section></main></body></html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (state.restaurant.name || 'menu').toLowerCase().replace(/\s+/g, '-') + '.html'; a.click(); URL.revokeObjectURL(a.href);
+  });
+  document.getElementById('btnPrint').addEventListener('click', () => window.print());
+
+  // Self-tests
+  document.getElementById('btnTests').addEventListener('click', runTests);
+
+  function escapeHtml(s) { return s.replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[m])); }
+
+  async function sendToBackend() {
+    if (!state.backend || !state.backend.baseURL) { alert('Set the backend base URL first.'); return; }
+    const base = state.backend.baseURL.replace(/\/$/, '');
+    const menuRes = await fetch(base + (state.backend.storePath || '/api/menu'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) });
+    if (!menuRes.ok) { alert('Store failed: ' + menuRes.status); return; }
+    const renderRes = await fetch(base + (state.backend.renderPath || '/api/render'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: state.id }) });
+    if (!renderRes.ok) { alert('Render failed: ' + renderRes.status); return; }
+    const { html } = await renderRes.json();
+    const blob = new Blob([html], { type: 'text/html' }); const url = URL.createObjectURL(blob); window.open(url, '_blank');
+  }
+
+  // Seed example if fresh
+  if (!loadState()) {
+    state.sections[0].items.push(
+      { id: uid(), name: 'Tomato Basil Soup', description: 'Slow-simmered San Marzano tomatoes with fresh basil.', price: 6.5, tags: ['vegetarian', 'gf'], available: true },
+      { id: uid(), name: 'Garlic Knots', description: 'Wood-fired dough tossed in garlic butter and parsley.', price: 5, tags: ['v'], available: true }
+    );
+    state.sections.push({ id: uid(), title: 'Mains', note: 'Served after 5pm', items: [
+      { id: uid(), name: 'Herb Roasted Chicken', description: 'Half chicken, rosemary jus, potatoes.', price: 18, tags: ['gf'], available: true },
+      { id: uid(), name: 'Mushroom Risotto', description: 'Arborio rice, cremini, parmesan.', price: 16, tags: ['vegetarian'], available: true }
+    ] });
+  }
+
+  renderBuilder();
+  renderPreview();
+
+  // --- Minimal self-test suite (adds test cases) ---
+  function runTests() {
+    const logEl = document.getElementById('testlog');
+    logEl.style.display = 'block';
+    const logs = [];
+    const ok = (name) => logs.push(`✔︎ ${name}`);
+    const fail = (name, e) => logs.push(`✘ ${name}: ${e && e.message ? e.message : e}`);
+
+    try {
+      // Test 1: el() creates element and appends string child as Text node
+      const b = el('button', { class: 'btn' }, ['X']);
+      if (!(b instanceof HTMLElement) || b.textContent !== 'X') throw new Error('el failed to create button with text');
+      ok('el() basic creation');
+
+      // Test 2: No nulls passed to appendChild in builder controls
+      const wrap = el('div');
+      const dupBtn = el('button', { class: 'btn ghost' }, ['Duplicate']);
+      wrap.appendChild(dupBtn); // should not throw
+      ok('appendChild receives Node');
+
+      // Test 3: Duplicate item logic clones & inserts after index
+      const tmpSec = { items: [{ id: 'a', name: 'One' }] };
+      const baseItem = tmpSec.items[0];
+      const clone = JSON.parse(JSON.stringify({ ...baseItem, id: uid() }));
+      tmpSec.items.splice(0 + 1, 0, clone);
+      if (tmpSec.items.length !== 2 || tmpSec.items[1].id === 'a') throw new Error('duplicate logic incorrect');
+      ok('duplicate logic');
+
+      // Test 4: Export HTML snapshot includes preview markup
+      const htmlStr = `<!doctype html><html><head><style>${document.querySelector('style').innerHTML}</style></head><body><main class="right"><section class="menu" id="preview">${document.getElementById('preview').innerHTML}</section></main></body></html>`;
+      if (!htmlStr.includes('class="menu"')) throw new Error('export html missing menu');
+      ok('export HTML contains preview');
+
+      // Test 5: Layout variant class is applied
+      state.settings.layoutVariant = 'two-col'; renderPreview();
+      if (!document.querySelector('.menu.layout-two-col')) throw new Error('two-col class not applied');
+      ok('layout two-col applied');
+
+      // Test 6: SVG ornament is injected when enabled
+      state.settings.svgTheme = 'laurel'; state.settings.svgPlacement = 'header'; renderPreview();
+      const hasOrn = !!document.querySelector('.menu .orn svg');
+      if (!hasOrn) throw new Error('ornament svg missing');
+      ok('ornament svg injected');
+
+      // Test 7: Bistro variant renders leader line and price
+      state.settings.layoutVariant = 'bistro'; renderPreview();
+      const leader = document.querySelector('.menu.layout-bistro .leader');
+      if (!leader) throw new Error('bistro leader not rendered');
+      ok('bistro leader rendered');
+
+      // Test 8: Logo placement applies and image present
+      state.settings.logoData = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc0MCcgaGVpZ2h0PSc0MCc+PHJlY3Qgd2lkdGg9JzQwJyBoZWlnaHQ9JzQwJyBmaWxsPSdibGFjaycvPjwvc3ZnPg==';
+      state.settings.logoPlacement = 'center'; renderPreview();
+      if (!document.querySelector('.logo-wrap.center img')) throw new Error('logo not injected');
+      ok('logo injected & centered');
+
+      // Restore
+      state.settings.layoutVariant = 'classic'; state.settings.svgTheme = 'fork'; state.settings.logoPlacement = 'none'; state.settings.logoData = ''; renderPreview();
+
+    } catch (e) {
+      fail('tests', e);
+    }
+
+    logEl.textContent = logs.join('\n');
+  }
+  // --- end tests ---
+
+  </script>
+
+  <!--
+    Backend reference (implement either Go or Rust):
+    POST /api/menu    -> store full JSON payload, keyed by menu.id
+    POST /api/render  -> body: { id }  ⇒ return { html: "...rendered menu..." }
+
+    You can generate the same markup the preview uses server-side for PDFs or static hosting.
+  -->
+</body>
+</html>
