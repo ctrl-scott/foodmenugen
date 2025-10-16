@@ -5,6 +5,8 @@ A single‑file **web‑based restaurant menu generator** that runs entirely in 
 
 ChatGPT Link: https://chatgpt.com/share/68f14002-f474-800c-acf3-16528285f344
 
+I was reading and interacting with Rust and Go based off an article I was reading yesterday about Vue.js and Rust working together - just experimenting with this - perhaps helpful to some folks
+
 ## ✨ Features
 
 - 🧩 **Single HTML file**, fully offline‑friendly (no dependencies)
